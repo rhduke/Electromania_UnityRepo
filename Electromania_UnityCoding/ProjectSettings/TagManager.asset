@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Battery
   - Metal Floor
+  - Checkpoint
   layers:
   - Default
   - TransparentFX

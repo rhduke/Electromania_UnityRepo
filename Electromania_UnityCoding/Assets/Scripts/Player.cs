@@ -8,6 +8,8 @@
  *  CHANGELOG
  *  -------------------------------------
  *  
+ *  Jan 26 [Ron, Austin] - 
+ *  
  *  Jan 23 [Ron, Austin, Nero] - Fixed player somtimes not moving by putting functions in Update() rather than FixedUpdate().
  *  Deceleration is working. We stored variables for the origins of the player and mouse click. Objects with "Metal Floor"
  *  will regenerate energy when player collides. Objects with "Battery" flag will regenerate when dashing through them.
@@ -46,11 +48,11 @@ using UnityEngine;
 public class  Player : MonoBehaviour
 {
     public static Player playerInstance;
+
     //-------------------------------------------------------------------------------------
     //  CONST Variables
     //-------------------------------------------------------------------------------------
 
-    
     public const float NOT_DASHING = -1.0f;        // dashTimer is set to this value when hes not dashing
     public const float DASH_ACC_SCALER = 0.8f;     // Used to determine when to start decelerating during dash
     public const float Z_POSITION = -1.5f;         // Constant z position of player
@@ -63,23 +65,26 @@ public class  Player : MonoBehaviour
     public Camera cam;          
     public Rigidbody rb;
 
-    public int health;
     public float jumpForce;
     public float moveSpeed;
     public float dashForce;
     public float dashDuration;          // Total time of the dash
     public float decelerationForce; // Amount of deceleration
     public float decelerateTime;    // The time at which to start decelerating during the dash
+
+    public bool isAlive;
     public bool canDash;
 
     public Vector3 inputs;
     public Vector3 mouseDashPoint;      // Point the player clicks when he dashes
     public Vector3 playerDashOrigin;    // Origin of the player when the mouse is clicked
+    public Vector3 checkpointLocation;  // Location of last checkpoint touched by player
 
     //-------------------------------------------------------------------------------------
     //  Private Variables
     //-------------------------------------------------------------------------------------
 
+    private Vector3 playerOrigin;    // Starting position
     private Vector3 plyrScreenPos;   // Position of the player in screen coordinates
     private float dashTimer;         // Current time elapsed in the dash
     private bool isDecelerating;     // Used to check to see if plyr is currently decelerating during dash
@@ -91,10 +96,10 @@ public class  Player : MonoBehaviour
     //-------------------------------------------------------------------------------------
     //  Start Function
     //-------------------------------------------------------------------------------------
+    #region Start
     public void Start()
     {
         playerInstance = this;
-        health = 0;
         jumpForce = 0.0f;
         moveSpeed = 5.0f;                // Ideal speed
         dashForce = 60.0f;               // Ideal force
@@ -104,13 +109,17 @@ public class  Player : MonoBehaviour
         dashTimer = NOT_DASHING;
         isDecelerating = false;
         canDash = true;
+        isAlive = true;
 
+        playerOrigin = rb.position;
         mouseDashPoint = Vector3.zero;
+        checkpointLocation = playerOrigin;
 
         xvel = 0.0f;
         yvel = 0.0f;
         velmag = 0.0f;
     }
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  FixedUpdate Function
@@ -118,6 +127,7 @@ public class  Player : MonoBehaviour
     //  Called every frame and updates the position of the player object. Calls the dash
     //  function when the LMB is clicked.
     //-------------------------------------------------------------------------------------
+    #region Fixed Update
     //public void FixedUpdate()
     //{
     //    plyrScreenPos = cam.WorldToScreenPoint(transform.position);     // Converts the player position to screen coordinates
@@ -127,6 +137,7 @@ public class  Player : MonoBehaviour
 
     //    transform.position = new Vector3(transform.position.x, transform.position.y, Z_POSITION);   // Keep player's z coordinate constant
     //}
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  Update Function
@@ -134,6 +145,7 @@ public class  Player : MonoBehaviour
     //  Called every frame and updates the position of the player object. Calls the dash
     //  function when the LMB is clicked.
     //-------------------------------------------------------------------------------------
+    #region Update
     public void Update()
     {
         {
@@ -141,6 +153,11 @@ public class  Player : MonoBehaviour
 
             HorizontalMoveListener();   // Move player left/right if left/right arrows or A/D keys pressed
             DashListener();             // Calls dash function when LMB is pressed
+
+            if (Input.GetKeyDown("k"))
+            {
+                Kill();
+            }
 
 
             rb.velocity = Vector3.ClampMagnitude(rb.velocity, MAX_SPEED);   // Caps player speed at MAX_SPEED
@@ -150,8 +167,7 @@ public class  Player : MonoBehaviour
             transform.position = new Vector3(transform.position.x, transform.position.y, Z_POSITION);   // Keep player's z coordinate constant
         }
     }
-
-
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  Dash Function
@@ -159,6 +175,7 @@ public class  Player : MonoBehaviour
     //  Dash works by determining the resulting vector between the LMB click position and
     //  the 
     //-------------------------------------------------------------------------------------
+    #region Dash
     public void DashListener()
     {
         //---------------------------------------------------------------------------------
@@ -205,10 +222,13 @@ public class  Player : MonoBehaviour
             }
         }
     }
-    
+    #endregion
+
     //-------------------------------------------------------------------------------------
     //  Horizontal Key Press Function
     //-------------------------------------------------------------------------------------
+    #region Movement Control Function
+
     public void HorizontalMoveListener()
     {
         inputs.x = Input.GetAxis("Horizontal");     // Used for getting the keyboard inputs from the player (A, D and left and right arrows)
@@ -219,10 +239,13 @@ public class  Player : MonoBehaviour
             rb.MovePosition(transform.position + inputs * moveSpeed * Time.deltaTime);
         }
     }
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  On Trigger Enter Function
     //-------------------------------------------------------------------------------------
+    #region On Trigger Collision Function
+
     void OnTriggerEnter(Collider other)
     {
         // Need to differentiate between capsules and enemies
@@ -231,12 +254,17 @@ public class  Player : MonoBehaviour
         {
             playerInstance.Regenerate();
         }
-
+        else if(other.CompareTag("Checkpoint"))
+        {
+            checkpointLocation = other.transform.position;
+        }
     }
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  On Collision Stay Function
     //-------------------------------------------------------------------------------------
+    #region On Collision Stay Function
     private void OnCollisionStay(Collision collision)
     {
         if (collision.collider.CompareTag("Metal Floor") && !IsDashing())
@@ -244,51 +272,97 @@ public class  Player : MonoBehaviour
             playerInstance.Regenerate();
         }
     }
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  Is Dashing Function
     //-------------------------------------------------------------------------------------
+    #region Is Dashing Function
+
     public bool IsDashing()
     {
         return dashTimer >= 0 && dashTimer < dashDuration;
     }
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  Is Dash Complete Function
     //-------------------------------------------------------------------------------------
+    #region Is Dash Complete Function
+
     public bool IsDashComplete()
     {
         return dashTimer >= dashDuration;
     }
+    #endregion
 
     //-------------------------------------------------------------------------------------
     //  Reset Dash Timer Function
     //-------------------------------------------------------------------------------------
+    #region Reset Dash Timer Function
+
     public void StartDashTimer()
     {
         dashTimer = 0;
     }
+    #endregion
+
     //-------------------------------------------------------------------------------------
-    //
     //  Regenerate Function
-    //
     //-------------------------------------------------------------------------------------
+    #region Regenerate
     public void Regenerate()                          //Function that regains energy setting canDash to true
     {
         canDash = true;
     }
+    #endregion
+
     //-------------------------------------------------------------------------------------
-    //
     //  Discharge Function
-    //
     //-------------------------------------------------------------------------------------
-    public  void Discharge()                            //Function thatloses energy setting canDash to false
+    #region Discharge
+    public void Discharge()                            //Function thatloses energy setting canDash to false
     {
         canDash = false;
     }
+    #endregion
+
+    //-------------------------------------------------------------------------------------
+    //  Kill Function
+    //-------------------------------------------------------------------------------------
+    #region Kill
+    public void Kill()
+    {
+        isAlive = false;
+        Respawn();
+    }
+    #endregion
+
+    //-------------------------------------------------------------------------------------
+    //  Respawn Function
+    //-------------------------------------------------------------------------------------
+    #region Respawn
+    public void Respawn()
+    {
+        isAlive = true;
+        Teleport(checkpointLocation);
+    }
+    #endregion
+
+    //-------------------------------------------------------------------------------------
+    //  Teleport Function
+    //-------------------------------------------------------------------------------------
+    #region Teleport
+    public void Teleport(Vector3 location)
+    {
+        rb.MovePosition(location);
+    }
+    #endregion
+
     //-------------------------------------------------------------------------------------
     //  OnGUI Function
     //-------------------------------------------------------------------------------------
+    #region TEST GUI
     private void OnGUI()
     {
         if (Input.GetMouseButtonDown(0))
@@ -297,6 +371,7 @@ public class  Player : MonoBehaviour
         }
 
 
+        GUI.color = Color.blue;
         GUI.Label(new Rect(30, 30, 500, 200), "Mouse screen location: " + Input.mousePosition.x + ", " + Input.mousePosition.y);                            // Output coordates of the mouse location
         GUI.Label(new Rect(30, 50, 500, 200), "Obj world position: " + transform.position.x + ", " + transform.position.y + ", " + transform.position.z);   // Output coordinates of player world position
         GUI.Label(new Rect(30, 70, 500, 200), "Obj screen position: " + plyrScreenPos.x + ", " + plyrScreenPos.y);                                          // Output coordinates of player screen position
@@ -305,8 +380,10 @@ public class  Player : MonoBehaviour
         GUI.Label(new Rect(400, 30, 500, 200), "Dash Timer: " + dashTimer);                                     // Dash timer
         GUI.Label(new Rect(400, 50, 500, 200), "Dash Duration: " + dashDuration);
         GUI.Label(new Rect(200, 170, 500, 200), "Use 'A' and 'D' to move left and right");                       // Movement
-        GUI.Label(new Rect(200, 200, 500, 200), "Use Left mouse click to dash");                                 // Dashing
+        GUI.Label(new Rect(200, 190, 500, 200), "Use Left mouse click to dash");                                 // Dashing
+        GUI.Label(new Rect(200, 190, 500, 200), "Press K to kill the player");                                 // Kill
 
         GUI.Label(new Rect(400, 70, 500, 200), "Can Dash: " + canDash);
     }
+    #endregion
 }
